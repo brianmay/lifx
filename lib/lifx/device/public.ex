@@ -8,7 +8,7 @@ defmodule Lifx.Device do
   alias Lifx.Protocol.{Group, HSBK, HSBKS, Location}
   alias Lifx.Protocol.Packet
 
-  @max_api_timeout Application.get_env(:lifx, :max_api_timeout)
+  defp get_max_api_timeout, do: Application.get_env(:lifx, :max_api_timeout)
 
   @type t :: %__MODULE__{
           id: atom(),
@@ -40,7 +40,7 @@ defmodule Lifx.Device do
   defp send_and_wait(%Device{pid: pid, id: id}, protocol_type, payload, mode) do
     request = {:send, protocol_type, payload, mode}
 
-    case GenServer.call(pid, request, @max_api_timeout) do
+    case GenServer.call(pid, request, get_max_api_timeout()) do
       {:ok, payload} -> {:ok, payload}
       {:error, err} -> {:error, err}
     end

@@ -10,9 +10,9 @@ defmodule Lifx.Device.Server do
   alias Lifx.Protocol.{Group, Location}
   alias Lifx.Protocol.Packet
 
-  @udp Application.get_env(:lifx, :udp)
-  @max_retries Application.get_env(:lifx, :max_retries)
-  @wait_between_retry Application.get_env(:lifx, :wait_between_retry)
+  defp get_udp, do: Application.get_env(:lifx, :udp)
+  defp get_max_retries, do: Application.get_env(:lifx, :max_retries)
+  defp get_wait_between_retry, do: Application.get_env(:lifx, :wait_between_retry)
 
   defmodule Pending do
     @moduledoc false
@@ -207,10 +207,10 @@ defmodule Lifx.Device.Server do
           state = Map.update(state, :pending_list, nil, &Map.delete(&1, sequence))
           {:noreply, state}
 
-        pending.tries < @max_retries ->
+        pending.tries < get_max_retries() ->
           Logger.debug("#{prefix(state)} Sending seq #{sequence} tries #{pending.tries}.")
           send(state, pending.packet, pending.payload)
-          timer = Process.send_after(self(), {:send, sequence}, @wait_between_retry)
+          timer = Process.send_after(self(), {:send, sequence}, get_wait_between_retry())
           pending = %Pending{pending | tries: pending.tries + 1, timer: timer}
           state = Map.update(state, :pending_list, nil, &Map.put(&1, sequence, pending))
           {:noreply, state}
@@ -240,7 +240,7 @@ defmodule Lifx.Device.Server do
 
   @spec send(State.t(), Packet.t(), bitstring()) :: :ok
   defp send(%State{} = state, %Packet{} = packet, payload) do
-    @udp.send(
+    get_udp().send(
       state.udp,
       state.device.host,
       state.device.port,

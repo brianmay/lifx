@@ -4,11 +4,13 @@ defmodule Lifx.Poller.Private do
   require Logger
   alias Lifx.Device
 
-  @poll_state_time Application.get_env(:lifx, :poll_state_time)
+  defp get_poll_state_time, do: Application.get_env(:lifx, :poll_state_time)
 
   def reschedule do
-    if @poll_state_time != :disable do
-      Process.send_after(self(), :poll_all, @poll_state_time)
+    time = get_poll_state_time()
+
+    if time != :disable do
+      Process.send_after(self(), :poll_all, time)
     end
   end
 

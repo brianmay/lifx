@@ -12,9 +12,9 @@ defmodule Lifx.Client.Server do
   alias Lifx.Protocol.Packet
 
   @port 56_700
-  @multicast Application.get_env(:lifx, :multicast)
-  @poll_discover_time Application.get_env(:lifx, :poll_discover_time)
-  @udp Application.get_env(:lifx, :udp)
+  defp get_multicast, do: Application.get_env(:lifx, :multicast)
+  defp get_poll_discover_time, do: Application.get_env(:lifx, :poll_discover_time)
+  defp get_udp, do: Application.get_env(:lifx, :udp)
 
   defmodule State do
     @moduledoc false
@@ -47,7 +47,7 @@ defmodule Lifx.Client.Server do
       {:reuseaddr, true}
     ]
 
-    {:ok, udp} = @udp.open(0, udp_options)
+    {:ok, udp} = get_udp().open(0, udp_options)
     Process.send_after(self(), :discover, 0)
 
     {:ok, %State{source: source, udp: udp}}
@@ -71,7 +71,7 @@ defmodule Lifx.Client.Server do
   def handle_info(:discover, state) do
     Logger.debug("Running discover on timer.")
     send_discovery_packet(state.source, state.udp)
-    Process.send_after(self(), :discover, @poll_discover_time)
+    Process.send_after(self(), :discover, get_poll_discover_time())
     {:noreply, state}
   end
 
@@ -245,9 +245,9 @@ defmodule Lifx.Client.Server do
 
   @spec send_discovery_packet(integer(), port()) :: :ok | {:error, atom()}
   defp send_discovery_packet(source, udp) do
-    @udp.send(
+    get_udp().send(
       udp,
-      @multicast,
+      get_multicast(),
       @port,
       %Packet{
         :frame_header => %FrameHeader{:source => source, :tagged => 1},
