@@ -4,9 +4,6 @@ on:
   - push
   - pull_request
 
-env:
-  MIX_ENV: test
-
 jobs:
   test:
 
@@ -16,6 +13,9 @@ jobs:
       matrix:
         elixir: [1.10.2]
         otp: [22.2.8]
+
+    env:
+      MIX_ENV: test
 
     steps:
     - uses: actions/checkout@v2
@@ -86,4 +86,4 @@ jobs:
         mkdir -p priv/plts
         mix dialyzer --plt
     - name: Run dialyzer
-      run: mix dialyzer --no-check --halt-exit-status
+      run: mix dialyzer --no-check
