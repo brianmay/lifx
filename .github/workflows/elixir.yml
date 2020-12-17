@@ -85,5 +85,8 @@ jobs:
       run: |
         mkdir -p priv/plts
         mix dialyzer --plt
+    - name: Build
+      run: |
+        mix compile
     - name: Run dialyzer
       run: mix dialyzer --no-check
