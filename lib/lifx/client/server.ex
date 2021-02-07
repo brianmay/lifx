@@ -21,7 +21,7 @@ defmodule Lifx.Client.Server do
     @type t :: %__MODULE__{
             udp: port(),
             source: integer(),
-            handlers: [{pid(), pid()}],
+            handlers: [pid()],
             devices: [Device.t()]
           }
     defstruct udp: nil,
@@ -48,7 +48,8 @@ defmodule Lifx.Client.Server do
     ]
 
     {:ok, udp} = get_udp().open(0, udp_options)
-    Process.send_after(self(), :discover, 0)
+    Process.send_after(self(), :discover, 1)
+    :timer.send_interval(get_poll_discover_time(), :discover)
 
     {:ok, %State{source: source, udp: udp}}
   end
@@ -59,9 +60,9 @@ defmodule Lifx.Client.Server do
     {:reply, :ok, state}
   end
 
-  def handle_call({:handler, handler}, {pid, _}, state) do
-    Lifx.EventSupervisor.start_handler(handler, pid)
-    {:reply, :ok, %{state | :handlers => [{handler, pid} | state.handlers]}}
+  def handle_call({:handler, handler}, {_pid, _}, state) do
+    _ref = Process.monitor(handler)
+    {:reply, :ok, %State{state | handlers: [handler | state.handlers]}}
   end
 
   def handle_call(:devices, _from, state) do
@@ -71,7 +72,6 @@ defmodule Lifx.Client.Server do
   def handle_info(:discover, state) do
     Logger.debug("Running discover on timer.")
     send_discovery_packet(state.source, state.udp)
-    Process.send_after(self(), :discover, get_poll_discover_time())
     {:noreply, state}
   end
 
@@ -84,8 +84,15 @@ defmodule Lifx.Client.Server do
     {pid_devices, other_devices} =
       Enum.split_with(state.devices, fn device -> device.pid == pid end)
 
-    pid_devices |> Enum.take(-1) |> hd |> notify(:deleted)
-    {:noreply, %State{state | devices: other_devices}}
+    handlers = Enum.reject(state.handlers, fn handler -> handler == pid end)
+    state = %State{state | devices: other_devices, handlers: handlers}
+
+    case pid_devices do
+      [] -> nil
+      [head | _] -> notify(state, head, :deleted)
+    end
+
+    {:noreply, state}
   end
 
   @spec lookup_device(atom(), State.t()) :: Device.t() | nil
@@ -104,7 +111,11 @@ defmodule Lifx.Client.Server do
   @spec update_device(Device.t(), State.t()) :: State.t()
 
   defp update_device(%Device{} = device, %State{} = state) do
-    notify(device, :updated)
+    if lookup_device(device.id, state) == nil do
+        notify(state, device, :added)
+    else
+        notify(state, device, :updated)
+    end
 
     devices =
       if Enum.any?(state.devices, fn dev -> dev.id == device.id end) do
@@ -258,8 +269,10 @@ defmodule Lifx.Client.Server do
     )
   end
 
-  @spec notify(Device.t(), :updated | :deleted) :: :ok
-  defp notify(%Device{} = device, status) do
-    Lifx.EventSupervisor.notify(device, status)
+  @spec notify(State.t(), Device.t(), :added | :updated | :deleted) :: :ok
+  defp notify(%State{} = state, %Device{} = device, status) do
+    Enum.each(state.handlers, fn handler ->
+      GenServer.cast(handler, {status, device})
+    end)
   end
 end
