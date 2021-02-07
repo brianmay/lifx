@@ -82,35 +82,35 @@ defmodule Lifx.Protocol do
   defmodule HSBK do
     @moduledoc "A LIFX colors"
     @type t :: %__MODULE__{
-            hue: integer(),
-            saturation: integer(),
-            brightness: integer(),
-            kelvin: integer()
+            hue: integer() | float(),
+            saturation: integer() | float(),
+            brightness: integer() | float(),
+            kelvin: integer() | float()
           }
     defstruct hue: 120,
               saturation: 100,
               brightness: 100,
               kelvin: 4000
+  end
 
-    @spec hue(HSBK.t()) :: integer
-    def hue(hsbk) do
-      round(65_535 / 360 * hsbk.hue)
-    end
+  @spec hue(HSBK.t()) :: integer
+  defp hue(%HSBK{} = hsbk) do
+    round(65_535 / 360 * hsbk.hue)
+  end
 
-    @spec saturation(HSBK.t()) :: integer
-    def saturation(hsbk) do
-      round(65_535 / 100 * hsbk.saturation)
-    end
+  @spec saturation(HSBK.t()) :: integer
+  defp saturation(%HSBK{} = hsbk) do
+    round(65_535 / 100 * hsbk.saturation)
+  end
 
-    @spec brightness(HSBK.t()) :: integer
-    def brightness(hsbk) do
-      round(65_535 / 100 * hsbk.brightness)
-    end
+  @spec brightness(HSBK.t()) :: integer
+  defp brightness(%HSBK{} = hsbk) do
+    round(65_535 / 100 * hsbk.brightness)
+  end
 
-    @spec kelvin(HSBK.t()) :: integer
-    def kelvin(hsbk) do
-      hsbk.kelvin
-    end
+  @spec kelvin(HSBK.t()) :: integer
+  defp kelvin(%HSBK{} = hsbk) do
+    round(hsbk.kelvin)
   end
 
   defmodule HSBKS do
@@ -297,10 +297,10 @@ defmodule Lifx.Protocol do
   @spec hsbk(HSBK.t()) :: bitstring()
   def hsbk(%HSBK{} = hsbk) do
     <<
-      HSBK.hue(hsbk)::little-integer-size(16),
-      HSBK.saturation(hsbk)::little-integer-size(16),
-      HSBK.brightness(hsbk)::little-integer-size(16),
-      HSBK.kelvin(hsbk)::little-integer-size(16)
+      hue(hsbk)::little-integer-size(16),
+      saturation(hsbk)::little-integer-size(16),
+      brightness(hsbk)::little-integer-size(16),
+      kelvin(hsbk)::little-integer-size(16)
     >>
   end
 
