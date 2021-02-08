@@ -109,10 +109,10 @@ defmodule LifxTest do
       1234::little-integer-size(32)
     >>
 
-    Lifx.Client.add_handler(Lifx.Handler)
+    Lifx.Client.add_handler(self())
     fake_response = Protocol.create_packet(@discovery_response_packet, payload)
     send(client_pid, {:udp, nil, "1.2.3.4", nil, fake_response})
-    assert_receive({:updated, %Device{}})
+    assert_receive({_, {:added, %Device{}}})
     devices = Lifx.Client.devices()
     assert Enum.count(devices) > 0
 
