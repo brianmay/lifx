@@ -112,9 +112,9 @@ defmodule Lifx.Client.Server do
 
   defp update_device(%Device{} = device, %State{} = state) do
     if lookup_device(device.id, state) == nil do
-        notify(state, device, :added)
+      notify(state, device, :added)
     else
-        notify(state, device, :updated)
+      notify(state, device, :updated)
     end
 
     devices =
