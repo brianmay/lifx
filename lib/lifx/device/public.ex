@@ -11,7 +11,7 @@ defmodule Lifx.Device do
   defp get_max_api_timeout, do: Application.get_env(:lifx, :max_api_timeout)
 
   @type t :: %__MODULE__{
-          id: atom(),
+          id: integer(),
           pid: GenServer.server() | nil,
           host: tuple(),
           port: integer(),
@@ -165,6 +165,16 @@ defmodule Lifx.Device do
     :ok = GenServer.call(device.pid, {:packet, packet})
   catch
     :exit, value -> {:error, "The device #{device.id} is dead: #{inspect(value)}"}
+  end
+
+  @spec update(Device.t()) :: :ok | {:error, String.t()}
+  def update(%Device{} = device) do
+    :ok = GenServer.cast(device.pid, :update)
+  end
+
+  @spec stop(Device.t()) :: :ok | {:error, String.t()}
+  def stop(%Device{} = device) do
+    :ok = GenServer.cast(device.pid, :stop)
   end
 
   @spec set_extended_color_zones(

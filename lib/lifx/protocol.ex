@@ -23,7 +23,7 @@ defmodule Lifx.Protocol do
   defmodule FrameAddress do
     @moduledoc "A LIFX FrameAddress portion of the packet"
     @type t :: %__MODULE__{
-            target: atom() | :all,
+            target: integer() | :all,
             ack_required: integer(),
             res_required: integer(),
             sequence: byte()
@@ -376,6 +376,12 @@ defmodule Lifx.Protocol do
       res_required::size(1)
     >> = reverse_bits(rar)
 
+    target =
+      case target do
+        0 -> :all
+        target -> target
+      end
+
     fh = %FrameHeader{
       :size => size,
       :origin => origin,
@@ -386,7 +392,7 @@ defmodule Lifx.Protocol do
     }
 
     fa = %FrameAddress{
-      :target => int_to_atom(target),
+      :target => target,
       :ack_required => ack_required,
       :res_required => res_required,
       :sequence => sequence
@@ -407,7 +413,11 @@ defmodule Lifx.Protocol do
 
   @spec create_packet(Packet.t(), bitstring()) :: bitstring()
   def create_packet(%Packet{} = packet, payload \\ <<>>) when is_binary(payload) do
-    target = atom_to_int(packet.frame_address.target)
+    target =
+      case packet.frame_address.target do
+        :all -> 0
+        target -> target
+      end
 
     otap =
       reverse_bits(<<
@@ -446,27 +456,6 @@ defmodule Lifx.Protocol do
     |> :erlang.binary_to_list()
     |> :lists.reverse()
     |> :erlang.list_to_binary()
-  end
-
-  # @spec atom_to_int(atom()) :: integer
-  defp atom_to_int(:all), do: 0
-
-  defp atom_to_int(id) when id |> is_atom do
-    id
-    |> Atom.to_string()
-    |> String.to_integer()
-  end
-
-  defp atom_to_int(id) when id |> is_integer do
-    id
-  end
-
-  defp int_to_atom(0), do: :all
-
-  defp int_to_atom(id) when id |> is_integer do
-    id
-    |> Integer.to_string()
-    |> String.to_atom()
   end
 
   @spec set_extended_color_zones(

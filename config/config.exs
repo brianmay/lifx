@@ -4,9 +4,8 @@ use Mix.Config
 
 config :lifx,
   multicast: {192, 168, 5, 255},
-  #  Don't make this too small or the poller task will fall behind.
-  poll_state_time: 10 * 60 * 1000,
-  poll_discover_time: 1 * 60 * 1000,
+  dead_time: 25 * 1000,
+  poll_discover_time: 10 * 1000,
   # Should be at least max_retries*wait_between_retry.
   max_api_timeout: 5000,
   max_retries: 3,

@@ -5,8 +5,8 @@ defmodule Lifx.Poller do
 
   require Logger
 
-  def schedule_device(pid, %Device{} = device) do
-    Process.send_after(pid, {:poll_device, device}, 0)
+  def poll_device(%Device{} = device) do
+    GenServer.cast(__MODULE__, {:poll_device, device})
   end
 
   @spec add_handler(pid()) :: :ok

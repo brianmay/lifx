@@ -5,12 +5,14 @@ defmodule Lifx.Device.Server do
   use Lifx.Protocol.Types
   require Logger
   alias Lifx.Device
+  alias Lifx.Poller
   alias Lifx.Protocol
   alias Lifx.Protocol.{FrameAddress, FrameHeader, ProtocolHeader}
   alias Lifx.Protocol.{Group, Location}
   alias Lifx.Protocol.Packet
 
   defp get_udp, do: Application.get_env(:lifx, :udp)
+  defp get_dead_time, do: Application.get_env(:lifx, :dead_time)
   defp get_max_retries, do: Application.get_env(:lifx, :max_retries)
   defp get_wait_between_retry, do: Application.get_env(:lifx, :wait_between_retry)
 
@@ -35,10 +37,11 @@ defmodule Lifx.Device.Server do
             udp: port(),
             source: integer(),
             sequence: integer(),
-            pending_list: %{required(integer()) => Pending.t()}
+            pending_list: %{required(integer()) => Pending.t()},
+            dead_timer: reference()
           }
 
-    @enforce_keys [:device, :udp, :source]
+    @enforce_keys [:device, :udp, :source, :dead_timer]
     defstruct device: nil,
               host: {0, 0, 0, 0},
               label: nil,
@@ -47,12 +50,13 @@ defmodule Lifx.Device.Server do
               udp: nil,
               source: 0,
               sequence: 0,
-              pending_list: %{}
+              pending_list: %{},
+              dead_timer: nil
   end
 
   @spec prefix(State.t()) :: String.t()
   defp prefix(state) do
-    "Device #{state.device.id}/#{state.device.label}:"
+    "Device #{state.device.id}:"
   end
 
   @spec start_link({Device.t(), port(), integer()}) :: {:ok, pid()}
@@ -62,10 +66,15 @@ defmodule Lifx.Device.Server do
 
   @spec init({Device.t(), port(), integer()}) :: {:ok, State.t()}
   def init({device, udp, source}) do
+    dead_timer = Process.send_after(self(), :dead, get_dead_time())
+
+    device = %Device{device | pid: self()}
+
     state = %State{
       device: device,
       udp: udp,
-      source: source
+      source: source,
+      dead_timer: dead_timer
     }
 
     {:ok, state}
@@ -101,6 +110,11 @@ defmodule Lifx.Device.Server do
   end
 
   def handle_call({:packet, %Packet{} = packet}, _from, state) do
+    Logger.debug("#{prefix(state)} Received packet.")
+    Process.cancel_timer(state.dead_timer)
+    dead_timer = Process.send_after(self(), :dead, get_dead_time())
+    state = %State{state | dead_timer: dead_timer}
+
     state = handle_packet(packet, state)
     sequence = packet.frame_address.sequence
 
@@ -144,6 +158,19 @@ defmodule Lifx.Device.Server do
 
     state = schedule_packet(state, packet, payload, from, mode)
     {:noreply, state}
+  end
+
+  def handle_cast(:update, state) do
+    Logger.debug("#{prefix(state)} Received update.")
+    Process.cancel_timer(state.dead_timer)
+    dead_timer = Process.send_after(self(), :dead, get_dead_time())
+    state = %State{state | dead_timer: dead_timer}
+    {:noreply, state}
+  end
+
+  def handle_cast(:stop, state) do
+    Logger.info("#{prefix(state)} Received stop.")
+    {:stop, :normal, state}
   end
 
   def handle_cast({:send, protocol_type, payload, mode}, state) do
@@ -216,9 +243,7 @@ defmodule Lifx.Device.Server do
           {:noreply, state}
 
         true ->
-          Logger.debug(
-            "#{prefix(state)} Failed sending seq #{sequence} tries #{pending.tries}, killing light."
-          )
+          Logger.debug("#{prefix(state)} Failed sending seq #{sequence} tries #{pending.tries}.")
 
           Enum.each(state.pending_list, fn {_, p} ->
             if is_nil(pending.from) do
@@ -230,12 +255,20 @@ defmodule Lifx.Device.Server do
           end)
 
           state = Map.update(state, :pending_list, nil, &Map.delete(&1, sequence))
-          {:stop, :normal, state}
+          {:noreply, state}
       end
     else
       Logger.debug("#{prefix(state)} Sending seq #{sequence}, no record, presumed already done.")
       {:noreply, state}
     end
+  end
+
+  def handle_info(:dead, %State{} = state) do
+    # Timer expired, meaning we haven't seen any packets in a while.
+    # Try to poll device to make sure it is really dead.
+    Logger.info("#{prefix(state)} Device has timed out.")
+    Poller.poll_device(state.device)
+    {:noreply, state}
   end
 
   @spec send(State.t(), Packet.t(), bitstring()) :: :ok

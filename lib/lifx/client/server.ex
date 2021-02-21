@@ -81,6 +81,8 @@ defmodule Lifx.Client.Server do
   end
 
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
+    Logger.debug("LIFX process exited")
+
     {pid_devices, other_devices} =
       Enum.split_with(state.devices, fn device -> device.pid == pid end)
 
@@ -91,7 +93,7 @@ defmodule Lifx.Client.Server do
     {:noreply, state}
   end
 
-  @spec lookup_device(atom(), State.t()) :: Device.t() | nil
+  @spec lookup_device(integer(), State.t()) :: Device.t() | nil
   defp lookup_device(target, state) do
     device_list =
       state.devices
@@ -107,12 +109,6 @@ defmodule Lifx.Client.Server do
   @spec update_device(Device.t(), State.t()) :: State.t()
 
   defp update_device(%Device{} = device, %State{} = state) do
-    if lookup_device(device.id, state) == nil do
-      notify(state, device, :added)
-    else
-      notify(state, device, :updated)
-    end
-
     devices =
       if Enum.any?(state.devices, fn dev -> dev.id == device.id end) do
         Enum.map(state.devices, fn d ->
@@ -183,7 +179,7 @@ defmodule Lifx.Client.Server do
     host = ip
     port = packet.payload.port
 
-    device =
+    {device, status} =
       case lookup_device(target, state) do
         nil ->
           device = %Device{
@@ -204,22 +200,27 @@ defmodule Lifx.Client.Server do
             {:ok, child} ->
               _ref = Process.monitor(child)
               device = %Device{device | pid: child}
-              Lifx.Poller.schedule_device(Lifx.Poller, device)
-              device
+              {device, :added}
 
             {:error, error} ->
               Logger.error("Cannot start device child process for #{target}: #{inspect(error)}.")
 
-              nil
+              {nil, nil}
           end
 
         device ->
-          %Device{device | host: host, port: port}
+          device = %Device{device | host: host, port: port}
+          {device, :updated}
       end
 
     case device do
-      nil -> state
-      device -> update_device(device, state)
+      nil ->
+        state
+
+      device ->
+        Lifx.Device.update(device)
+        notify(state, device, status)
+        update_device(device, state)
     end
   end
 
@@ -267,6 +268,8 @@ defmodule Lifx.Client.Server do
 
   @spec notify(State.t(), Device.t(), :added | :updated | :deleted) :: :ok
   defp notify(%State{} = state, %Device{} = device, status) do
+    Logger.debug("Notify update for #{device.id}: #{inspect(status)}")
+
     Enum.each(state.handlers, fn handler ->
       GenServer.cast(handler, {status, device})
     end)
