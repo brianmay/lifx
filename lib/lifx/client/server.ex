@@ -87,11 +87,7 @@ defmodule Lifx.Client.Server do
     handlers = Enum.reject(state.handlers, fn handler -> handler == pid end)
     state = %State{state | devices: other_devices, handlers: handlers}
 
-    case pid_devices do
-      [] -> nil
-      [head | _] -> notify(state, head, :deleted)
-    end
-
+    Enum.each(pid_devices, fn device -> notify(state, device, :deleted) end)
     {:noreply, state}
   end
 
