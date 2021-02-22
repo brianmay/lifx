@@ -48,7 +48,7 @@ defmodule LifxTest do
       ack_required: 0,
       res_required: 1,
       sequence: 0,
-      target: :"99"
+      target: 99
     },
     protocol_header: %ProtocolHeader{
       type: 3
@@ -115,13 +115,5 @@ defmodule LifxTest do
     assert_receive({_, {:added, %Device{}}})
     devices = Lifx.Client.devices()
     assert Enum.count(devices) > 0
-
-    Mox.expect(Lifx.UdpMock, :send, 2, fn _socket, _host, _port, _payload -> nil end)
-
-    Mox.expect(Lifx.UdpMock, :send, 1, fn _socket, _host, _port, _payload ->
-      send(pid, :sent_3rd_retry)
-    end)
-
-    assert_receive(:sent_3rd_retry, 5000)
   end
 end
